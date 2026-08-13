@@ -209,6 +209,8 @@ Automatic retrieval can fail when captions are disabled, a video is private or a
 
 ```text
 ytenhance/
+|-- .github/workflows/secret-scan.yml  Secret scanning for pushes and pull requests
+|-- AGENTS.md                     Contributor and repository guidance
 |-- app_config.py                 Per-user settings and DPAPI protection
 |-- model_clients.py              OpenAI and Gemini HTTP clients
 |-- prompt_loader.py              Local task-prompt loading
@@ -249,6 +251,12 @@ Run the lightweight application self-test without opening the full interface:
 python youtube_enhance.py --self-test
 ```
 
+Every push and pull request also runs Gitleaks against the complete Git history. If Gitleaks is installed locally, run the same type of check before publishing:
+
+```powershell
+gitleaks git --redact .
+```
+
 ## Building the Windows executable
 
 Install the dependencies and run PyInstaller with the checked-in specification:
@@ -283,8 +291,11 @@ Remove-Item Env:YOUTUBE_ENHANCE_SELF_TEST
 - Transcripts and generated results are held in memory and are not added to the settings file.
 - Requests necessarily send prompt text and the transcript to the selected model provider. Review the provider's data and privacy terms before analyzing sensitive material.
 - The optional RapidAPI fallback sends the YouTube video ID, not a manually pasted transcript, to the configured transcript endpoint.
+- Gitleaks scans every push and pull request for committed credentials and other secret patterns.
 
 Do not commit settings files, `.env` files, API keys, or logs. If a key is ever exposed, revoke it at the provider and issue a replacement.
+
+Before publishing changes, inspect `git status --short` and `git diff --cached`. Remember that commit author names and email addresses are public Git metadata; configure a GitHub noreply email if you do not want to publish a personal address. `.gitignore` is only a safeguard, not a substitute for reviewing staged files. If a real secret reaches Git history, rotate it immediately; deleting it in a later commit does not remove the original value from history.
 
 ## Troubleshooting
 
