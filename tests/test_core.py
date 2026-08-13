@@ -6,11 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import customtkinter as ctk
+
 from app_config import SettingsStore
 from model_clients import _error_message, _gemini_output_text, _openai_output_text, parse_model_choice
 from prompt_loader import build_user_input, load_task_prompt
 from transcripts import extract_video_id, filter_duplicate_transcript_lines, format_transcript_items
-from youtube_enhance import ContextMenu, YouTubeEnhanceApp, parse_titles, titlecase_chapters
+from youtube_enhance import ContextMenu, YouTubeEnhanceApp, parse_titles, split_summary, titlecase_chapters
 
 
 class SettingsTests(unittest.TestCase):
@@ -135,6 +137,11 @@ class OutputFormattingTests(unittest.TestCase):
     def test_chapter_titlecase_preserves_timestamp(self) -> None:
         self.assertEqual(titlecase_chapters("00:01:20 systems thinking"), "00:01:20 Systems Thinking")
 
+    def test_summary_hashtags_are_split_into_chips(self) -> None:
+        body, tags = split_summary("First paragraph.\n\nSecond paragraph.\n\n#one,#two,#three")
+        self.assertEqual(body, "First paragraph.\n\nSecond paragraph.")
+        self.assertEqual(tags, ["#one", "#two", "#three"])
+
 
 class _NoThreadYouTubeEnhanceApp(YouTubeEnhanceApp):
     def load_models_async(self) -> None:
@@ -219,6 +226,20 @@ class UiControlsTests(unittest.TestCase):
         self.assertFalse(self.app.full_list_var.get())
         self.assertEqual(self.app.settings.get("OPENAI_API_KEY"), "preserved-key")
         self.assertEqual(self.app.status_label.cget("text"), "Ready")
+
+    def test_reference_output_layout_renders_populated_results(self) -> None:
+        self.app.results = {
+            "titles": "First Title\nSecond Title",
+            "summary": "First paragraph.\n\nSecond paragraph.\n\n#one,#two",
+            "chapters": "00:00:00 Start Here\n00:01:00 Next Step",
+        }
+
+        self.app._render_results()
+
+        self.assertEqual(self.app.output_badges["titles"].cget("text"), "2 OF 5")
+        self.assertEqual(self.app.output_badges["chapters"].cget("text"), "2 CH")
+        self.assertEqual(self.app.summary_tags, ["#one", "#two"])
+        self.assertIsInstance(self.app.output_frames["summary"].winfo_children()[0], ctk.CTkTextbox)
 
 
 if __name__ == "__main__":

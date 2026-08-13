@@ -54,6 +54,7 @@ All three tasks run independently. If one request fails, successful results from
 - Paste and clear controls for the URL field
 - Paste, copy, and clear controls for the transcript field
 - Right-click cut, copy, paste, select-all, and clear menus in text-entry areas
+- Responsive two-column dashboard with task-color-coded output cards, summary hashtag chips, highlighted chapter timestamps, and compact status metadata
 - Dark, light, and system themes
 - A top-level **Clear All** action that restores the startup workspace while preserving saved settings
 - Per-user settings storage with Windows DPAPI protection for API keys
@@ -245,7 +246,7 @@ Run the complete test suite:
 python -m unittest discover -s tests -v
 ```
 
-The tests are offline. They exercise settings persistence, secret protection, prompt assembly, model-response parsing, video ID extraction, transcript formatting and deduplication, API-key redaction, paste/clear behavior, context menus, and the full **Clear All** reset. They do not send requests to OpenAI, Gemini, YouTube, or RapidAPI.
+The tests are offline. They exercise settings persistence, secret protection, prompt assembly, model-response parsing, video ID extraction, transcript formatting and deduplication, API-key redaction, output formatting and layout, paste/clear behavior, context menus, and the full **Clear All** reset. They do not send requests to OpenAI, Gemini, YouTube, or RapidAPI.
 
 Run the lightweight application self-test without opening the full interface:
 

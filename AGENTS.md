@@ -27,7 +27,7 @@ Tests use the standard-library `unittest` framework. Name methods `test_<behavio
 
 ## Commit & Pull Request Guidelines
 
-History currently contains only `Initial release of YouTube Enhance`, so no formal convention is established. Use concise, imperative subjects such as `Add transcript retry handling`, and keep each commit focused. Pull requests should explain user-visible behavior, list verification commands, link relevant issues, and include screenshots for UI changes. Call out prompt or packaging changes explicitly.
+Recent history uses Conventional Commit prefixes such as `docs:` and `chore(security):`. Continue that pattern with concise, imperative subjects, for example `feat(ui): refine output cards`, and keep each commit focused. Pull requests should explain user-visible behavior, list verification commands, link relevant issues, and include screenshots for UI changes. Call out prompt or packaging changes explicitly.
 
 ## Security & Configuration
 
