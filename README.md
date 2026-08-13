@@ -82,10 +82,10 @@ For each task, YouTube Enhance loads `system.md` and the optional `user.md` from
 
 ## Requirements
 
-To run from source:
+To run the current release or work from source:
 
-- Windows 10/11 or macOS 11 and newer
-- Python 3.11 or newer
+- Windows 10/11 or macOS 26 and newer for the notarized DMG
+- Python 3.11 or newer when running from source; packaged releases include their runtime
 - Internet access for transcript retrieval and model requests
 - An OpenAI API key, a Gemini API key, or both
 - A RapidAPI key only if the optional transcript fallback is wanted
@@ -308,7 +308,7 @@ Run the checked-in release workflow from the repository root:
 bash scripts/build_macos.sh
 ```
 
-The script creates an isolated build environment under `~/Library/Caches`, builds and Developer ID-signs `YouTube Enhance.app`, runs its offline self-test, creates and signs the DMG, submits it with `notarytool`, staples Apple’s ticket, and verifies it with `stapler` and Gatekeeper. The finished artifact is `dist/YouTubeEnhance-1.0.0.dmg`. Override the defaults with `YOUTUBE_ENHANCE_APP_VERSION`, `YOUTUBE_ENHANCE_CODESIGN_IDENTITY`, or `YOUTUBE_ENHANCE_NOTARY_PROFILE`.
+The script creates an isolated build environment under `~/Library/Caches`, builds and Developer ID-signs `YouTube Enhance.app`, runs its offline self-test, creates and signs the DMG, submits it with `notarytool`, staples Apple's ticket, and verifies it with `stapler` and Gatekeeper. The finished artifact is `dist/YouTubeEnhance-1.0.0.dmg`. The current Homebrew Python runtime requires macOS 26, so the workflow declares and verifies that minimum before signing. Override the defaults with `YOUTUBE_ENHANCE_APP_VERSION`, `YOUTUBE_ENHANCE_MACOS_MIN_VERSION`, `YOUTUBE_ENHANCE_CODESIGN_IDENTITY`, or `YOUTUBE_ENHANCE_NOTARY_PROFILE`; only lower the deployment target when the bundled Python runtime and dependencies support it.
 
 Use `bash scripts/build_macos.sh --build-only` to create and verify a signed test DMG without submitting it to Apple.
 Use `bash scripts/build_macos.sh --adhoc-test` for local validation when Developer ID private-key access is intentionally unavailable; that artifact is not suitable for distribution.

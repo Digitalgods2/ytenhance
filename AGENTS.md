@@ -15,7 +15,7 @@ python -m pip install -r requirements.txt
 python youtube_enhance.py
 ```
 
-Run `python -m unittest discover -s tests -v` for the offline suite and `python youtube_enhance.py --self-test` for startup validation. Build Windows with `pyinstaller --clean youtube_enhance.spec`. On macOS, `bash scripts/build_macos.sh` creates, signs, notarizes, staples, and verifies the DMG; never run that workflow without the intended Developer ID identity.
+Run `python -m unittest discover -s tests -v` for the offline suite and `python youtube_enhance.py --self-test` for startup validation. Build Windows with `pyinstaller --clean youtube_enhance.spec`. On macOS 26 or newer, `bash scripts/build_macos.sh` creates, signs, notarizes, staples, and verifies the DMG; never run that workflow without the intended Developer ID identity. Keep `YOUTUBE_ENHANCE_MACOS_MIN_VERSION` aligned with the bundled Python runtime.
 
 ## Coding Style & Naming Conventions
 

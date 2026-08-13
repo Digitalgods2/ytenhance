@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_VERSION="${YOUTUBE_ENHANCE_APP_VERSION:-1.0.0}"
+MACOS_MIN_VERSION="${YOUTUBE_ENHANCE_MACOS_MIN_VERSION:-26.0}"
 NOTARY_PROFILE="${YOUTUBE_ENHANCE_NOTARY_PROFILE:-YouTubeEnhance-notary}"
 MODE="${1:-release}"
 BUILD_ROOT="${YOUTUBE_ENHANCE_BUILD_ROOT:-$HOME/Library/Caches/YouTubeEnhance/build}"
@@ -23,7 +24,7 @@ if [[ "$MODE" != "release" && "$MODE" != "--build-only" && "$MODE" != "--adhoc-t
     exit 1
 fi
 
-for command_name in codesign ditto hdiutil python3 security shasum xcrun; do
+for command_name in codesign ditto hdiutil plutil python3 security shasum xcrun; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
         echo "Required command is missing: $command_name" >&2
         exit 1
@@ -58,6 +59,7 @@ fi
 "$VENV_DIR/bin/python" -m pip install -r "$REPO_ROOT/requirements.txt"
 
 export YOUTUBE_ENHANCE_APP_VERSION="$APP_VERSION"
+export YOUTUBE_ENHANCE_MACOS_MIN_VERSION="$MACOS_MIN_VERSION"
 if [[ "$MODE" == "--adhoc-test" ]]; then
     unset YOUTUBE_ENHANCE_CODESIGN_IDENTITY
 else
@@ -74,6 +76,34 @@ if [[ ! -d "$APP_PATH" ]]; then
     echo "PyInstaller did not create $APP_PATH" >&2
     exit 1
 fi
+
+declared_min_version="$(plutil -extract LSMinimumSystemVersion raw "$APP_PATH/Contents/Info.plist")"
+python_framework_binary="$(find "$APP_PATH/Contents/Frameworks/Python.framework/Versions" -type f -name Python -print -quit)"
+if [[ -z "$python_framework_binary" ]]; then
+    echo "The bundled Python framework could not be found." >&2
+    exit 1
+fi
+python_min_version="$(xcrun vtool -show-build "$python_framework_binary" | awk '$1 == "minos" { print $2; exit }')"
+if [[ -z "$python_min_version" ]]; then
+    echo "The bundled Python framework deployment target could not be read." >&2
+    exit 1
+fi
+
+version_is_at_least() {
+    local candidate_major candidate_minor required_major required_minor
+    IFS=. read -r candidate_major candidate_minor <<< "$1"
+    IFS=. read -r required_major required_minor <<< "$2"
+    candidate_minor="${candidate_minor:-0}"
+    required_minor="${required_minor:-0}"
+    [[ "$candidate_major" -gt "$required_major" ]] \
+        || [[ "$candidate_major" -eq "$required_major" && "$candidate_minor" -ge "$required_minor" ]]
+}
+
+if ! version_is_at_least "$declared_min_version" "$python_min_version"; then
+    echo "The app declares macOS $declared_min_version, but its Python runtime requires macOS $python_min_version." >&2
+    exit 1
+fi
+echo "Verified macOS deployment target: declared $declared_min_version; Python runtime $python_min_version."
 
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 "$APP_PATH/Contents/MacOS/YouTubeEnhance" --self-test

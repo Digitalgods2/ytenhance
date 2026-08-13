@@ -27,6 +27,7 @@ pyz = PYZ(a.pure)
 
 codesign_identity = (os.environ.get("YOUTUBE_ENHANCE_CODESIGN_IDENTITY") or None) if sys.platform == "darwin" else None
 app_version = os.environ.get("YOUTUBE_ENHANCE_APP_VERSION", "1.0.0")
+macos_min_version = os.environ.get("YOUTUBE_ENHANCE_MACOS_MIN_VERSION", "26.0")
 
 if sys.platform == "darwin":
     exe = EXE(
@@ -62,7 +63,7 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleDisplayName": "YouTube Enhance",
             "CFBundleName": "YouTube Enhance",
-            "LSMinimumSystemVersion": "11.0",
+            "LSMinimumSystemVersion": macos_min_version,
             "NSHighResolutionCapable": True,
         },
     )
