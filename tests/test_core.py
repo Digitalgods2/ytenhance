@@ -5,9 +5,11 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import customtkinter as ctk
 
+import app_config
 from app_config import SettingsStore
 from model_clients import _error_message, _gemini_output_text, _openai_output_text, parse_model_choice
 from prompt_loader import build_user_input, load_task_prompt
@@ -17,7 +19,13 @@ from youtube_enhance import ContextMenu, YouTubeEnhanceApp, parse_titles, split_
 
 class SettingsTests(unittest.TestCase):
     def test_secrets_round_trip_without_plaintext_storage(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        # macOS Keychain writes require a GUI security session. The dedicated
+        # Keychain test below supplies a fake backend for deterministic CI.
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            app_config.sys,
+            "platform",
+            "linux" if app_config.sys.platform == "darwin" else app_config.sys.platform,
+        ):
             path = Path(directory) / "settings.json"
             store = SettingsStore(path)
             store.load()
@@ -42,6 +50,37 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(loaded.get("GEMINI_API_KEY"), "test-gemini-secret")
             self.assertEqual(loaded.get("RAPIDAPI_KEY"), "test-rapid-secret")
             self.assertEqual(loaded.get("LAST_MODEL"), "Gemini · gemini-3.6-flash")
+
+    def test_macos_secrets_use_keychain_references(self) -> None:
+        class FakeKeyring:
+            def __init__(self) -> None:
+                self.values: dict[tuple[str, str], str] = {}
+
+            def set_password(self, service: str, key: str, value: str) -> None:
+                self.values[(service, key)] = value
+
+            def get_password(self, service: str, key: str) -> str | None:
+                return self.values.get((service, key))
+
+            def delete_password(self, service: str, key: str) -> None:
+                self.values.pop((service, key), None)
+
+        fake_keyring = FakeKeyring()
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            app_config.sys, "platform", "darwin"
+        ), mock.patch.object(app_config, "_load_keyring", return_value=fake_keyring):
+            path = Path(directory) / "settings.json"
+            store = SettingsStore(path, keychain_service="YouTube Enhance Tests")
+            store.load()
+            store.save({"OPENAI_API_KEY": "mac-secret"})
+
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["OPENAI_API_KEY"], "keychain:OPENAI_API_KEY")
+            self.assertNotIn("mac-secret", path.read_text(encoding="utf-8"))
+
+            loaded = SettingsStore(path, keychain_service="YouTube Enhance Tests")
+            loaded.load()
+            self.assertEqual(loaded.get("OPENAI_API_KEY"), "mac-secret")
 
 
 class PromptTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 # YouTube Enhance
 
-YouTube Enhance is a Windows desktop application that turns a YouTube transcript into ready-to-use publishing material:
+YouTube Enhance is a Windows and macOS desktop application that turns a YouTube transcript into ready-to-use publishing material:
 
 - Five descriptive video titles
 - A concise two-paragraph summary with eight hashtags
@@ -22,6 +22,7 @@ The application sends the included task prompts and transcript directly to OpenA
 - [Project structure](#project-structure)
 - [Development and testing](#development-and-testing)
 - [Building the Windows executable](#building-the-windows-executable)
+- [Building and notarizing the macOS DMG](#building-and-notarizing-the-macos-dmg)
 - [Privacy and security](#privacy-and-security)
 - [Troubleshooting](#troubleshooting)
 - [Design note](#design-note)
@@ -57,7 +58,7 @@ All three tasks run independently. If one request fails, successful results from
 - Responsive two-column dashboard with task-color-coded output cards, summary hashtag chips, highlighted chapter timestamps, and compact status metadata
 - Dark, light, and system themes
 - A top-level **Clear All** action that restores the startup workspace while preserving saved settings
-- Per-user settings storage with Windows DPAPI protection for API keys
+- Native secret protection through Windows DPAPI or the macOS Keychain
 - Redacted provider error messages so API keys are not displayed in the status bar or written to the log
 
 ## How it works
@@ -83,7 +84,7 @@ For each task, YouTube Enhance loads `system.md` and the optional `user.md` from
 
 To run from source:
 
-- Windows 10 or Windows 11 recommended
+- Windows 10/11 or macOS 11 and newer
 - Python 3.11 or newer
 - Internet access for transcript retrieval and model requests
 - An OpenAI API key, a Gemini API key, or both
@@ -93,7 +94,7 @@ The graphical interface uses CustomTkinter. Runtime dependencies are listed in `
 
 ## Quick start
 
-Clone the repository and enter the project directory:
+Clone the repository and enter the project directory. The following example uses PowerShell on Windows:
 
 ```powershell
 git clone https://github.com/Digitalgods2/ytenhance.git
@@ -131,19 +132,26 @@ Text fields in the Settings window support the standard keyboard shortcuts and a
 
 ### Where settings are stored
 
-On Windows, settings are stored for the signed-in user at:
+Application settings and logs are stored for the signed-in user:
+
+| Platform | Directory |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\YouTubeEnhance` |
+| macOS | `~/Library/Application Support/YouTubeEnhance` |
+
+The settings filename is:
 
 ```text
-%LOCALAPPDATA%\YouTubeEnhance\settings.json
+settings.json
 ```
 
-The application log is stored in the same directory:
+The application log is:
 
 ```text
-%LOCALAPPDATA%\YouTubeEnhance\youtube_enhance.log
+youtube_enhance.log
 ```
 
-API keys are encrypted before being written to disk with Windows Data Protection API (DPAPI). They can normally be decrypted only by the same Windows user account on the same computer. The selected model is stored alongside the encrypted values.
+Windows encrypts API keys with Data Protection API (DPAPI). macOS stores them in the login Keychain and places only Keychain references in `settings.json`. The selected model is stored in the settings file.
 
 If a saved key is blank, the application checks these process environment variables as fallbacks:
 
@@ -190,7 +198,7 @@ Each directory can contain:
 - `system.md`: required provider instructions for the task
 - `user.md`: optional text placed immediately before the transcript
 
-Edit these Markdown files to change formatting, tone, constraints, or output structure. Keep the prompt directories beside the Python files when running from source. PyInstaller bundles them into the Windows executable according to `youtube_enhance.spec`.
+Edit these Markdown files to change formatting, tone, constraints, or output structure. Keep the prompt directories beside the Python files when running from source. PyInstaller bundles them into Windows and macOS releases according to `youtube_enhance.spec`.
 
 Prompt loading is intentionally local and deterministic: YouTube Enhance does not download prompts or invoke Fabric patterns at runtime.
 
@@ -214,13 +222,14 @@ Automatic retrieval can fail when captions are disabled, a video is private or a
 ytenhance/
 |-- .github/workflows/secret-scan.yml  Secret scanning for pushes and pull requests
 |-- AGENTS.md                     Contributor and repository guidance
-|-- app_config.py                 Per-user settings and DPAPI protection
+|-- app_config.py                 Per-user settings and native secret protection
 |-- model_clients.py              OpenAI and Gemini HTTP clients
 |-- prompt_loader.py              Local task-prompt loading
 |-- transcripts.py                Video ID parsing and transcript retrieval
 |-- youtube_enhance.py            CustomTkinter application and UI workflow
 |-- youtube_enhance.spec          PyInstaller build definition
 |-- requirements.txt              Runtime and build dependencies
+|-- scripts/build_macos.sh        Signed and notarized DMG release workflow
 |-- create_video_titles/          Title-generation prompt
 |-- create_video_summary/         Summary-generation prompt
 |-- create_video_chapters/        Chapter-generation prompt
@@ -285,10 +294,31 @@ $env:YOUTUBE_ENHANCE_SELF_TEST = "1"
 Remove-Item Env:YOUTUBE_ENHANCE_SELF_TEST
 ```
 
+## Building and notarizing the macOS DMG
+
+Build macOS releases on a Mac with Xcode command-line tools, a valid **Developer ID Application** certificate in the login Keychain, and a saved `notarytool` profile. Create the profile once; the command prompts securely for the Apple credentials it needs:
+
+```bash
+xcrun notarytool store-credentials "YouTubeEnhance-notary"
+```
+
+Run the checked-in release workflow from the repository root:
+
+```bash
+bash scripts/build_macos.sh
+```
+
+The script creates an isolated build environment under `~/Library/Caches`, builds and Developer ID-signs `YouTube Enhance.app`, runs its offline self-test, creates and signs the DMG, submits it with `notarytool`, staples Apple’s ticket, and verifies it with `stapler` and Gatekeeper. The finished artifact is `dist/YouTubeEnhance-1.0.0.dmg`. Override the defaults with `YOUTUBE_ENHANCE_APP_VERSION`, `YOUTUBE_ENHANCE_CODESIGN_IDENTITY`, or `YOUTUBE_ENHANCE_NOTARY_PROFILE`.
+
+Use `bash scripts/build_macos.sh --build-only` to create and verify a signed test DMG without submitting it to Apple.
+Use `bash scripts/build_macos.sh --adhoc-test` for local validation when Developer ID private-key access is intentionally unavailable; that artifact is not suitable for distribution.
+
+Do not copy signing certificates, private keys, or Apple passwords into this repository. Apple requires Developer ID signing, hardened runtime, secure timestamps, and `notarytool` for current direct-distribution notarization.
+
 ## Privacy and security
 
 - No API keys are embedded in source code or the executable.
-- Saved keys use Windows DPAPI protection tied to the local Windows user.
+- Saved keys use Windows DPAPI or the macOS login Keychain, tied to the local user.
 - Provider requests set `store: false`.
 - Provider error details are sanitized for recognizable OpenAI and Gemini key formats before display or logging.
 - Transcripts and generated results are held in memory and are not added to the settings file.
@@ -324,7 +354,7 @@ At least one provider key must be saved. A provider may also reject model-list r
 
 ### Where to find diagnostic information
 
-Review the per-user log at:
+Review the per-user log in the platform-specific data directory described above. On Windows, the full path is:
 
 ```text
 %LOCALAPPDATA%\YouTubeEnhance\youtube_enhance.log

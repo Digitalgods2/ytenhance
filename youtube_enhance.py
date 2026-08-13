@@ -260,9 +260,10 @@ class SettingsDialog(ctk.CTkToplevel):
             text_color=COLOR_MINT_TEXT,
             font=ctk.CTkFont(family="Arial", size=13, weight="bold"),
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=20, pady=(20, 2))
+        secure_storage_name = "macOS Keychain" if sys.platform == "darwin" else "your Windows account"
         ctk.CTkLabel(
             card,
-            text="Credentials stay on this device and are encrypted for your Windows account.",
+            text=f"Credentials stay on this device and are protected by {secure_storage_name}.",
             text_color=COLOR_MUTED,
             font=ctk.CTkFont(family="Arial", size=12),
         ).grid(row=1, column=0, columnspan=2, sticky="w", padx=20, pady=(0, 15))
@@ -313,7 +314,10 @@ class SettingsDialog(ctk.CTkToplevel):
         )
         self.show_keys.grid(row=5, column=1, sticky="w", padx=0, pady=(3, 12))
 
-        storage_text = "SECURE STORAGE\n%LOCALAPPDATA%\\YouTubeEnhance\\settings.json"
+        if sys.platform == "darwin":
+            storage_text = "SECURE STORAGE\n~/Library/Application Support/YouTubeEnhance"
+        else:
+            storage_text = "SECURE STORAGE\n%LOCALAPPDATA%\\YouTubeEnhance\\settings.json"
         ctk.CTkLabel(
             card,
             text=storage_text,
@@ -859,9 +863,12 @@ class YouTubeEnhanceApp(ctk.CTk):
             selection = self.model_combobox.get().strip()
         if not selection or selection == "Loading...":
             selection = self.settings.get("LAST_MODEL") or "OpenAI · model"
-        self.footer_meta_label.configure(
-            text=f"{selection}   |   store: false   |   %LOCALAPPDATA%\\YouTubeEnhance"
+        storage = (
+            "~/Library/Application Support/YouTubeEnhance"
+            if sys.platform == "darwin"
+            else "%LOCALAPPDATA%\\YouTubeEnhance"
         )
+        self.footer_meta_label.configure(text=f"{selection}   |   store: false   |   {storage}")
 
     def _update_transcript_meta(self, text: str) -> None:
         cleaned = (text or "").strip()
@@ -1313,6 +1320,12 @@ def run_self_test() -> None:
         system_prompt, _ = load_task_prompt(task)
         if not system_prompt:
             raise RuntimeError(f"Packaged prompt is empty: {task}")
+    if sys.platform == "darwin":
+        import keyring
+
+        if keyring.get_keyring().priority < 1:
+            raise RuntimeError("A supported macOS Keychain backend is unavailable")
+        return
     with tempfile.TemporaryDirectory() as directory:
         settings_path = Path(directory) / "settings.json"
         store = SettingsStore(settings_path)

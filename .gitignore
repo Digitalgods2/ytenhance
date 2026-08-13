@@ -1,9 +1,11 @@
 __pycache__/
+.DS_Store
 *.py[cod]
 *.log
 .pytest_cache/
 .coverage
 .venv/
+.venv-macos/
 venv/
 build/
 dist/

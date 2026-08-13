@@ -2,11 +2,11 @@
 
 ## Project Structure & Module Organization
 
-The application is organized as focused Python modules at the repository root. `youtube_enhance.py` owns the CustomTkinter UI and workflow; `model_clients.py` contains OpenAI and Gemini HTTP clients; `transcripts.py` retrieves and normalizes captions; `app_config.py` manages per-user settings and Windows DPAPI secret protection; and `prompt_loader.py` loads task prompts. Editable prompt assets live in `create_video_titles/`, `create_video_summary/`, and `create_video_chapters/`, each with `system.md` and `user.md`. Offline tests are in `tests/test_core.py`. Treat `build/`, `dist/`, `__pycache__/`, logs, and virtual environments as generated content.
+The application is organized as focused Python modules at the repository root. `youtube_enhance.py` owns the CustomTkinter UI and workflow; `model_clients.py` contains provider clients; `transcripts.py` retrieves captions; `app_config.py` manages settings plus DPAPI/Keychain protection; and `prompt_loader.py` loads task prompts. Editable prompts live in the three `create_video_*/` directories. Offline tests are in `tests/test_core.py`; the signed macOS release workflow is `scripts/build_macos.sh`. Treat `build/`, `dist/`, caches, logs, and virtual environments as generated content.
 
 ## Build, Test, and Development Commands
 
-Use Python 3.11 or newer on Windows:
+Use Python 3.11 or newer:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -15,7 +15,7 @@ python -m pip install -r requirements.txt
 python youtube_enhance.py
 ```
 
-Run `python -m unittest discover -s tests -v` for the complete offline suite. Use `python youtube_enhance.py --self-test` for a lightweight startup check. Build the standalone executable with `pyinstaller --clean youtube_enhance.spec`; output is written to `dist\YouTubeEnhance.exe`.
+Run `python -m unittest discover -s tests -v` for the offline suite and `python youtube_enhance.py --self-test` for startup validation. Build Windows with `pyinstaller --clean youtube_enhance.spec`. On macOS, `bash scripts/build_macos.sh` creates, signs, notarizes, staples, and verifies the DMG; never run that workflow without the intended Developer ID identity.
 
 ## Coding Style & Naming Conventions
 
@@ -31,4 +31,4 @@ Recent history uses Conventional Commit prefixes such as `docs:` and `chore(secu
 
 ## Security & Configuration
 
-Never commit API keys, `.env` files, settings, or logs. Preserve DPAPI protection and error redaction when changing configuration or provider code. Avoid logging transcripts or credentials. If prompt directories change, update `youtube_enhance.spec` so packaged builds include them.
+Never commit API keys, `.env` files, settings, logs, certificates, or notarization credentials. Preserve DPAPI/Keychain protection and error redaction. Avoid logging transcripts or credentials. If prompts or packaged assets change, update `youtube_enhance.spec` and test both platform targets.

@@ -1,8 +1,7 @@
 """Per-user settings storage for YouTube Enhance.
 
-Secrets are protected with Windows DPAPI before they are written to disk.  On
-other platforms the settings file is restricted to the current user, but the
-values are only encoded (not encrypted) so the app remains portable.
+Secrets use Windows DPAPI on Windows and the login Keychain on macOS. Other
+platforms retain the restricted-file fallback for source compatibility.
 """
 
 from __future__ import annotations
@@ -11,6 +10,7 @@ import base64
 import ctypes
 import json
 import os
+import sys
 import tempfile
 from ctypes import wintypes
 from pathlib import Path
@@ -20,6 +20,7 @@ from typing import Mapping
 APP_NAME = "YouTubeEnhance"
 SETTINGS_FILENAME = "settings.json"
 SECRET_KEYS = frozenset({"OPENAI_API_KEY", "GEMINI_API_KEY", "RAPIDAPI_KEY"})
+KEYCHAIN_SERVICE = "YouTube Enhance"
 
 DEFAULT_SETTINGS = {
     "OPENAI_API_KEY": "",
@@ -35,6 +36,8 @@ def get_user_data_dir() -> Path:
         base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
         if base:
             return Path(base) / APP_NAME
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP_NAME
     xdg = os.environ.get("XDG_CONFIG_HOME")
     if xdg:
         return Path(xdg) / APP_NAME
@@ -100,21 +103,69 @@ def _windows_unprotect(value: str) -> str:
         kernel32.LocalFree(output_blob.pbData)
 
 
-def protect_secret(value: str) -> str:
+def _load_keyring():
+    try:
+        import keyring
+    except ImportError as exc:  # pragma: no cover - dependency is bundled on macOS
+        raise OSError("macOS Keychain support is unavailable.") from exc
+    return keyring
+
+
+def _macos_store_secret(service: str, key: str, value: str) -> None:
+    keyring = _load_keyring()
+    try:
+        if value:
+            keyring.set_password(service, key, value)
+        elif keyring.get_password(service, key) is not None:
+            keyring.delete_password(service, key)
+    except Exception as exc:
+        raise OSError("Could not update the macOS Keychain.") from exc
+
+
+def _macos_read_secret(service: str, key: str) -> str:
+    try:
+        return str(_load_keyring().get_password(service, key) or "")
+    except Exception as exc:
+        raise OSError("Could not read the macOS Keychain.") from exc
+
+
+def protect_secret(
+    value: str,
+    *,
+    key: str | None = None,
+    keychain_service: str = KEYCHAIN_SERVICE,
+) -> str:
     if not value:
+        if sys.platform == "darwin" and key:
+            _macos_store_secret(keychain_service, key, "")
         return ""
+    if sys.platform == "darwin":
+        if not key:
+            raise ValueError("A Keychain account name is required on macOS.")
+        _macos_store_secret(keychain_service, key, value)
+        return f"keychain:{key}"
     if os.name == "nt":
         return _windows_protect(value)
     return "local:" + base64.b64encode(value.encode("utf-8")).decode("ascii")
 
 
-def unprotect_secret(value: str) -> str:
+def unprotect_secret(
+    value: str,
+    *,
+    key: str | None = None,
+    keychain_service: str = KEYCHAIN_SERVICE,
+) -> str:
     if not value:
         return ""
     if value.startswith("dpapi:"):
         if os.name != "nt":
             return ""
         return _windows_unprotect(value)
+    if value.startswith("keychain:"):
+        if sys.platform != "darwin":
+            return ""
+        account = key or value.removeprefix("keychain:")
+        return _macos_read_secret(keychain_service, account)
     if value.startswith("local:"):
         return base64.b64decode(value[6:].encode("ascii")).decode("utf-8")
     # Accept legacy plaintext settings once so saving can migrate them.
@@ -124,8 +175,14 @@ def unprotect_secret(value: str) -> str:
 class SettingsStore:
     """Load and save application settings without exposing keys in logs."""
 
-    def __init__(self, path: Path | None = None):
+    def __init__(
+        self,
+        path: Path | None = None,
+        *,
+        keychain_service: str = KEYCHAIN_SERVICE,
+    ):
         self.path = Path(path) if path else get_settings_path()
+        self.keychain_service = keychain_service
         self._values = dict(DEFAULT_SETTINGS)
 
     def load(self) -> dict[str, str]:
@@ -138,7 +195,15 @@ class SettingsStore:
                         if key not in payload:
                             continue
                         raw = str(payload[key] or "")
-                        values[key] = unprotect_secret(raw) if key in SECRET_KEYS else raw
+                        values[key] = (
+                            unprotect_secret(
+                                raw,
+                                key=key,
+                                keychain_service=self.keychain_service,
+                            )
+                            if key in SECRET_KEYS
+                            else raw
+                        )
             except (OSError, ValueError, UnicodeError):
                 # A corrupt settings file must not prevent the GUI from starting.
                 pass
@@ -157,7 +222,15 @@ class SettingsStore:
                     self._values[key] = str(value or "").strip()
 
         payload = {
-            key: protect_secret(value) if key in SECRET_KEYS else value
+            key: (
+                protect_secret(
+                    value,
+                    key=key,
+                    keychain_service=self.keychain_service,
+                )
+                if key in SECRET_KEYS
+                else value
+            )
             for key, value in self._values.items()
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
